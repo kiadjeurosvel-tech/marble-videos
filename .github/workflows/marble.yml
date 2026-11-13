@@ -1,0 +1,62 @@
+name: Marble run (3D, Kaggle GPU)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "test = only the 12 s finale (~30-60 min) | complet = full 100 s video (several hours)"
+        default: "test"
+      samples:
+        description: "Cycles samples (32 = fast, 64 = cleaner)"
+        default: "32"
+      recuperer:
+        description: "Optional: run ID of an earlier run whose Kaggle job is still running (only downloads the result)"
+        default: ""
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      GH_TOKEN: ${{ github.token }}
+      RID: ${{ inputs.recuperer || github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q -U kaggle
+      - name: Prepare + push Kaggle job
+        if: inputs.recuperer == ''
+        env:
+          MODE: ${{ inputs.mode }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          mkdir -p kjob
+          python3 - <<'PY'
+          import os, json
+          s = open("marble/runner.py").read()
+          s = s.replace("__MODE__", os.environ["MODE"]).replace("__SAMPLES__", os.environ["SAMPLES"])
+          s = s.replace("__SCRIPT__", open("marble/marble_run.py").read())
+          open("kjob/run.py", "w").write(s)
+          u = os.environ["KAGGLE_USERNAME"].strip(); slug = "marble-run-" + os.environ["RID"]
+          json.dump({"id": f"{u}/{slug}", "title": slug, "code_file": "run.py", "language": "python",
+                     "kernel_type": "script", "is_private": True, "enable_gpu": True,
+                     "enable_internet": True, "machine_shape": "NvidiaTeslaT4"}, open("kjob/kernel-metadata.json", "w"))
+          PY
+          kaggle kernels push -p kjob
+      - name: Wait for Kaggle + download
+        run: |
+          K="$(echo $KAGGLE_USERNAME | tr -d ' ')/marble-run-$RID"
+          for i in $(seq 1 335); do
+            sleep 60
+            S=$(kaggle kernels status "$K" 2>&1 || true); echo "$(date +%T) $S"
+            echo "$S" | grep -qiE "complete|error|cancel" && break
+          done
+          mkdir -p out && kaggle kernels output "$K" -p out || true
+          ls -la out; tail -40 out/*.log 2>/dev/null || true
+      - name: Publish download link
+        run: |
+          ls out/*.mp4 >/dev/null 2>&1 || { echo "::warning::Pas encore de vidéo. Relance ce workflow avec recuperer=$RID"; exit 0; }
+          TAG="marble-$(date +%Y%m%d-%H%M)"
+          gh release create "$TAG" out/*.mp4 $(ls out/*.log 2>/dev/null) --title "Marble run $TAG" --notes "Kaggle job marble-run-$RID"
+          echo "### Lien: https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
