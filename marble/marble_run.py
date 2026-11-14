@@ -880,13 +880,18 @@ else:
     cy.caustics_reflective = False; cy.caustics_refractive = False; cy.use_adaptive_sampling = True
     if A.gpu:
         pr = bpy.context.preferences.addons["cycles"].preferences
-        for dt in ("OPTIX", "CUDA", "HIP", "ONEAPI", "METAL"):
+        gpus = []
+        for dt in ("OPTIX", "CUDA"):
             try:
                 pr.compute_device_type = dt; pr.get_devices()
-                if any(d.type == dt for d in pr.devices): break
-            except Exception: pass
-        for d in pr.devices: d.use = True
-        cy.device = "GPU"; print("[gpu]", pr.compute_device_type, [d.name for d in pr.devices if d.use])
+                gpus = [d for d in pr.devices if d.type == dt]
+                if gpus: break
+            except Exception as e: print("[gpu]", dt, "failed:", e)
+        print("[gpu] devices:", [(d.name, d.type) for d in pr.devices])
+        if not gpus:
+            print("[gpu] NO GPU VISIBLE TO BLENDER - aborting to save quota"); sys.exit(3)
+        for d in pr.devices: d.use = d in gpus
+        cy.device = "GPU"; print("[gpu] using", pr.compute_device_type, [d.name for d in gpus])
 SC.view_settings.view_transform = "AgX"
 for lk in ("AgX - Punchy", "Punchy", "AgX - Medium High Contrast"):
     try: SC.view_settings.look = lk; break

@@ -13,9 +13,10 @@ for v in ["5.3.0", "5.2.4", "5.2.3", "5.1.2"]:
         blender = os.path.abspath(f"blender-{v}-linux-x64/blender"); print("Blender", v); break
 assert blender, "Blender download failed"
 sh("apt-get -qq install -y libxkbcommon0 libsm6 libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 >/dev/null 2>&1 || true")
+sh("nvidia-smi --query-gpu=name,driver_version --format=csv")
 rng = "--start 5280 --end 6000" if MODE == "test" else ""
 t = time.time()
-rc = sh(f"{blender} -b -P marble_run.py -- --engine cycles --gpu --samples {SAMPLES} --out frames/ {rng} 2>&1 | grep -E 'Saved|gpu|path\\]|scene\\]|Error|rror' ")
+rc = sh(f"{blender} -b -P marble_run.py -- --engine cycles --gpu --samples {SAMPLES} --out frames/ {rng} 2>&1 | grep -E 'Saved|Time|gpu|path\\]|scene\\]|Error|rror' ")
 n = len(glob.glob("frames/*.jpg")); print(f"{n} frames in {(time.time()-t)/60:.1f} min", flush=True)
 ff = shutil.which("ffmpeg")
 if not ff:
