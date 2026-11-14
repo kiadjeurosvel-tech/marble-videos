@@ -58,5 +58,5 @@ jobs:
         run: |
           ls out/*.mp4 >/dev/null 2>&1 || { echo "::warning::Pas encore de vidéo. Relance ce workflow avec recuperer=$RID"; exit 0; }
           TAG="marble-$(date +%Y%m%d-%H%M)"
-          gh release create "$TAG" out/*.mp4 $(ls out/*.log 2>/dev/null) --title "Marble run $TAG" --notes "Kaggle job marble-run-$RID"
+          gh release create "$TAG" out/*.mp4 $(ls out/*.log out/*.jpg 2>/dev/null) --title "Marble run $TAG" --notes "Kaggle job marble-run-$RID"
           echo "### Lien: https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY

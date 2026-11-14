@@ -39,6 +39,7 @@ ap.add_argument("--save-blend", default=None)
 ap.add_argument("--seed", type=int, default=7)
 ap.add_argument("--gpu", action="store_true")
 ap.add_argument("--no-render", action="store_true")
+ap.add_argument("--fast", action="store_true")
 A = ap.parse_args(argv)
 T0 = time.time()
 rng = random.Random(A.seed)
@@ -878,6 +879,11 @@ else:
     R.engine = "CYCLES"; cy = SC.cycles
     cy.samples = A.samples; cy.use_denoising = True; cy.max_bounces = 6; cy.transparent_max_bounces = 32
     cy.caustics_reflective = False; cy.caustics_refractive = False; cy.use_adaptive_sampling = True
+    if A.fast:
+        cy.max_bounces = 3; cy.transparent_max_bounces = 12; cy.adaptive_threshold = 0.05
+        cy.use_light_tree = True; cy.denoiser = "OPTIX" if A.gpu else "OPENIMAGEDENOISE"
+        try: cy.use_denoising_gpu = True
+        except Exception: pass
     if A.gpu:
         pr = bpy.context.preferences.addons["cycles"].preferences
         gpus = []

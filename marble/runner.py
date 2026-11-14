@@ -15,8 +15,26 @@ assert blender, "Blender download failed"
 sh("apt-get -qq install -y libxkbcommon0 libsm6 libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 >/dev/null 2>&1 || true")
 sh("nvidia-smi --query-gpu=name,driver_version --format=csv")
 rng = "--start 5280 --end 6000" if MODE == "test" else ""
+# --- benchmark candidate render paths on one frame, keep the fastest that works
+cands = {
+  "eevee-vulkan": f"{blender} -b --gpu-backend vulkan -P marble_run.py -- --engine eevee --samples 32",
+  "cycles-fast":  f"{blender} -b -P marble_run.py -- --engine cycles --gpu --fast --samples 16",
+}
+sh("apt-get -qq install -y libvulkan1 >/dev/null 2>&1 || true")
+best = None
+for name, cmd in cands.items():
+    t1 = time.time(); rc = sh(f"timeout 900 {cmd} --frames 5600 --out bench_{name}/ 2>&1 | grep -E 'gpu|render\\]|rror|Vulkan|EEVEE' | tail -8")
+    ok = os.path.exists(f"bench_{name}/05600.jpg") and os.path.getsize(f"bench_{name}/05600.jpg") > 30000
+    dt = None
+    for line in open("/dev/null"): pass
+    print(f"BENCH {name}: ok={ok} total={time.time()-t1:.0f}s", flush=True)
+    if ok:
+        shutil.copy(f"bench_{name}/05600.jpg", f"{W}/bench_{name}.jpg")
+        if best is None or (time.time()-t1) < best[1]: best = (name, time.time()-t1)
+assert best, "no render path works"
+print("CHOSEN", best, flush=True)
 t = time.time()
-rc = sh(f"{blender} -b -P marble_run.py -- --engine cycles --gpu --samples {SAMPLES} --out frames/ {rng} 2>&1 | grep -E 'Saved|Time|gpu|path\\]|scene\\]|Error|rror' ")
+sh(f"{cands[best[0]]} --out frames/ {rng} 2>&1 | grep -E 'Saved|Time|gpu|rror' ")
 n = len(glob.glob("frames/*.jpg")); print(f"{n} frames in {(time.time()-t)/60:.1f} min", flush=True)
 ff = shutil.which("ffmpeg")
 if not ff:
