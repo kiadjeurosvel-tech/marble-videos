@@ -17,10 +17,8 @@ sh("nvidia-smi --query-gpu=name,driver_version --format=csv")
 rng = "--start 5280 --end 6000" if MODE == "test" else ""
 # --- benchmark candidate render paths on one frame, keep the fastest that works
 cands = {
-  "eevee-vulkan": f"{blender} -b --gpu-backend vulkan -P marble_run.py -- --engine eevee --samples 32",
   "cycles-fast":  f"{blender} -b -P marble_run.py -- --engine cycles --gpu --fast --samples 16",
 }
-sh("apt-get -qq install -y libvulkan1 >/dev/null 2>&1 || true")
 best = None
 for name, cmd in cands.items():
     t1 = time.time(); rc = sh(f"timeout 900 {cmd} --frames 5600 --out bench_{name}/ 2>&1 | grep -E 'gpu|render\\]|rror|Vulkan|EEVEE' | tail -8")
