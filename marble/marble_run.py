@@ -880,6 +880,11 @@ else:
     cy.samples = A.samples; cy.use_denoising = True; cy.max_bounces = 6; cy.transparent_max_bounces = 32
     cy.caustics_reflective = False; cy.caustics_refractive = False; cy.use_adaptive_sampling = True
     if A.fast:
+        # thousands of emissive triangles (dust, tubes, wires) made light sampling the bottleneck:
+        # they still glow on camera, only the marble/chamber lights are sampled as lights
+        for m_ in bpy.data.materials:
+            if m_.name not in ("Marble",): m_.cycles.emission_sampling = "NONE"
+        R.use_motion_blur = False
         cy.max_bounces = 3; cy.transparent_max_bounces = 12; cy.adaptive_threshold = 0.05
         cy.use_light_tree = True; cy.denoiser = "OPTIX" if A.gpu else "OPENIMAGEDENOISE"
         try: cy.use_denoising_gpu = True
