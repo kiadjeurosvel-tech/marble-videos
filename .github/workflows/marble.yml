@@ -13,6 +13,7 @@ on:
         default: ""
 permissions:
   contents: write
+  actions: write
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -52,11 +53,21 @@ jobs:
             S=$(kaggle kernels status "$K" 2>&1 || true); echo "$(date +%T) $S"
             echo "$S" | grep -qiE "complete|error|cancel" && break
           done
+          echo "KSTATUS=$(echo $S | tr -d '\"')" >> $GITHUB_ENV
           mkdir -p out && kaggle kernels output "$K" -p out || true
           ls -la out; tail -40 out/*.log 2>/dev/null || true
-      - name: Publish download link
+      - name: Publish download link + automatic next step
+        env:
+          MODE: ${{ inputs.mode }}
         run: |
-          ls out/*.mp4 >/dev/null 2>&1 || { echo "::warning::Pas encore de vidéo. Relance ce workflow avec recuperer=$RID"; exit 0; }
-          TAG="marble-$(date +%Y%m%d-%H%M)"
-          gh release create "$TAG" out/*.mp4 $(ls out/*.log out/*.jpg 2>/dev/null) --title "Marble run $TAG" --notes "Kaggle job marble-run-$RID"
-          echo "### Lien: https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
+          if ls out/*.mp4 >/dev/null 2>&1; then
+            TAG="marble-$MODE-$(date +%Y%m%d-%H%M)"
+            gh release create "$TAG" out/*.mp4 $(ls out/*.log out/*.jpg 2>/dev/null) --title "Marble run $MODE $TAG" --notes "Kaggle job marble-run-$RID"
+            echo "### Lien: https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
+            if [ "$MODE" = "test" ]; then gh workflow run marble.yml -f mode=complet -f samples=${{ inputs.samples }}; echo "complet lancé automatiquement"; fi
+          elif echo "$KSTATUS" | grep -qi running; then
+            gh workflow run marble.yml -f mode=$MODE -f samples=${{ inputs.samples }} -f recuperer=$RID
+            echo "Kaggle tourne encore -> récupération relancée automatiquement"
+          else
+            echo "::error::Kaggle job ended without video: $KSTATUS"; tail -60 out/*.log 2>/dev/null; exit 1
+          fi
