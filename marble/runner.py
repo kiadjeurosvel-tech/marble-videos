@@ -2,6 +2,10 @@
 import os, subprocess, sys, time, glob, shutil, urllib.request
 MODE, SAMPLES = "__MODE__", "__SAMPLES__"
 SCRIPT = r'''__SCRIPT__'''
+if MODE == "diag":
+    import subprocess as _s; print(_s.run("nvidia-smi; free -g; nproc", shell=True, capture_output=True, text=True).stdout, flush=True)
+    for i in range(8): print("alive", i*30, flush=True); time.sleep(30)
+    open("/kaggle/working/diag.mp4", "wb").write(b"0"); sys.exit(0)
 W = "/kaggle/working"; os.chdir("/kaggle/tmp" if os.path.isdir("/kaggle/tmp") else "/tmp")
 open("marble_run.py", "w").write(SCRIPT)
 def sh(c): print("$", c, flush=True); return subprocess.call(c, shell=True)
