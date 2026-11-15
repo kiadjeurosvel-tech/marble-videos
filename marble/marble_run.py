@@ -886,7 +886,7 @@ else:
             if m_.name not in ("Marble",): m_.cycles.emission_sampling = "NONE"
         R.use_motion_blur = False
         cy.max_bounces = 3; cy.transparent_max_bounces = 12; cy.adaptive_threshold = 0.05
-        cy.use_light_tree = True; cy.denoiser = "OPTIX" if A.gpu else "OPENIMAGEDENOISE"
+        cy.use_light_tree = True; cy.denoiser = "OPENIMAGEDENOISE"   # OptiX denoiser fails on Kaggle driver
         try: cy.use_denoising_gpu = True
         except Exception: pass
     if A.gpu:
