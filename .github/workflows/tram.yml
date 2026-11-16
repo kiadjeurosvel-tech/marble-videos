@@ -1,0 +1,65 @@
+name: Le dernier tram (3D, Kaggle GPU)
+on:
+  workflow_dispatch:
+    inputs:
+      episode: {description: "ep3", default: "ep3"}
+      fps: {description: "images par seconde", default: "50"}
+      samples: {description: "Cycles samples", default: "16"}
+      recuperer: {description: "Optional: run ID of an earlier run whose Kaggle job is still running", default: ""}
+permissions:
+  contents: write
+  actions: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: rosvelkiadjeu
+      GH_TOKEN: ${{ github.token }}
+      RID: ${{ inputs.recuperer || github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q -U kaggle
+      - name: Prepare + push Kaggle job
+        if: inputs.recuperer == ''
+        env:
+          EP: ${{ inputs.episode }}
+          FPS: ${{ inputs.fps }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          mkdir -p kjob
+          python3 - <<'PY'
+          import os, json
+          s = open("tram/runner.py").read()
+          for k in ("EP", "FPS", "SAMPLES"): s = s.replace(f"__{k}__", os.environ[k])
+          s = s.replace("__REPO__", os.environ["GITHUB_REPOSITORY"]).replace("__KR__", open("tram/kr.py").read())
+          open("kjob/run.py", "w").write(s)
+          u = os.environ["KAGGLE_USERNAME"].strip(); slug = "tram-run-" + os.environ["RID"]
+          json.dump({"id": f"{u}/{slug}", "title": slug, "code_file": "run.py", "language": "python",
+                     "kernel_type": "script", "is_private": True, "enable_gpu": True,
+                     "enable_internet": True, "machine_shape": "NvidiaTeslaT4"}, open("kjob/kernel-metadata.json", "w"))
+          PY
+          kaggle kernels push -p kjob
+      - name: Wait for Kaggle + download
+        run: |
+          K="$(echo $KAGGLE_USERNAME | tr -d ' ')/tram-run-$RID"
+          for i in $(seq 1 335); do
+            sleep 60
+            S=$(kaggle kernels status "$K" 2>&1 || true); echo "$(date +%T) $S"
+            echo "$S" | grep -qiE "complete|error|cancel" && break
+          done
+          echo "KSTATUS=$(echo $S | tr -d '\"')" >> $GITHUB_ENV
+          mkdir -p out && kaggle kernels output "$K" -p out || true
+          ls -la out; tail -40 out/*.log 2>/dev/null || true
+      - name: Publish download link
+        run: |
+          if ls out/*.mp4 >/dev/null 2>&1; then
+            TAG="tram-${{ inputs.episode }}-${{ inputs.fps }}fps-$(date +%Y%m%d-%H%M)"
+            gh release create "$TAG" out/*.mp4 $(ls out/*.log 2>/dev/null) --title "Le dernier tram $TAG" --notes "Kaggle job tram-run-$RID"
+            echo "### Lien: https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
+          elif echo "$KSTATUS" | grep -qi running; then
+            gh workflow run tram.yml -f episode=${{ inputs.episode }} -f fps=${{ inputs.fps }} -f samples=${{ inputs.samples }} -f recuperer=$RID
+          else
+            echo "::error::Kaggle job ended without video: $KSTATUS"; tail -60 out/*.log 2>/dev/null; exit 1
+          fi
