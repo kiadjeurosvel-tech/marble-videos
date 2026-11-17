@@ -1,0 +1,20 @@
+name: Fetch audio
+on:
+  workflow_dispatch:
+    inputs:
+      urls: {description: "space-separated URLs", required: true}
+      tag: {description: "release tag", required: true}
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p dl; i=0
+          for u in ${{ inputs.urls }}; do i=$((i+1)); curl -sSL "$u" -o dl/audio_$i.mp3; done
+          ls -la dl
+          gh release create "${{ inputs.tag }}" dl/* --title "${{ inputs.tag }}" --notes "audio"
